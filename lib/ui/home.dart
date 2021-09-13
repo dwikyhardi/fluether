@@ -11,6 +11,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart'
     as permissionHandler;
+import 'package:pull_to_refresh/pull_to_refresh.dart';
 
 class Home extends StatefulWidget {
   const Home({Key? key}) : super(key: key);
@@ -22,6 +23,8 @@ class Home extends StatefulWidget {
 class _HomeState extends State<Home> {
   CurrentWeatherData? _currentWeatherData;
   ForecastWeatherData? _forecastWeatherData;
+  RefreshController _refreshController =
+      RefreshController(initialRefresh: true);
 
   Future<Position?> getLatLong() async {
     Position positionZero = Position(
@@ -107,15 +110,15 @@ class _HomeState extends State<Home> {
   void initState() {
     // TODO: implement initState
     super.initState();
-    getLatLong().then((position) {
-      getCurrentWeather(position!).then((value) {
-        getForecastWeather(position);
-      });
-    });
+    // getLatLong().then((position) {
+    //   getCurrentWeather(position!).then((value) {
+    //     getForecastWeather(position);
+    //   });
+    // });
   }
 
   Future<void> getCurrentWeather(Position position) async {
-    await DioService.setupDio(context, isLoading: true).then((dio) async {
+    await DioService.setupDio(context, isLoading: false).then((dio) async {
       var currentWeather = await DioClient(dio).getCurrentWeather(
           position.latitude, position.longitude, DioService.apiKey);
 
@@ -127,13 +130,14 @@ class _HomeState extends State<Home> {
   }
 
   Future<void> getForecastWeather(Position position) async {
-    await DioService.setupDio(context, isLoading: true).then((dio) async {
+    await DioService.setupDio(context, isLoading: false).then((dio) async {
       var forecastWeather = await DioClient(dio).getForecastWeather(
           position.latitude, position.longitude, DioService.apiKey);
 
       print('Forecast Weather =>>>>>> ${jsonEncode(forecastWeather)}');
       setState(() {
         _forecastWeatherData = forecastWeather;
+        _refreshController.refreshCompleted();
       });
     });
   }
@@ -201,180 +205,195 @@ class _HomeState extends State<Home> {
         child: SizedBox(
           height: height - 225,
           width: width,
-          child: SingleChildScrollView(
-            child: Stack(
-              children: [
-                _locationInfo(),
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    vertical: 15,
-                    horizontal: 10,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        curDate,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w300,
+          child: SmartRefresher(
+            controller: _refreshController,
+            header: ClassicHeader(
+              textStyle: TextStyle(
+                color: Colors.grey,
+              ),
+            ),
+            onRefresh: () {
+              getLatLong().then((position) {
+                getCurrentWeather(position!).then((value) {
+                  getForecastWeather(position);
+                });
+              });
+            },
+            child: SingleChildScrollView(
+              child: Stack(
+                children: [
+                  _locationInfo(),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      vertical: 15,
+                      horizontal: 10,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          curDate,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w300,
+                          ),
                         ),
-                      ),
-                      SizedBox(
-                        height: 20,
-                      ),
-                      _currentWeather(height),
-                      SizedBox(
-                        height: 20,
-                      ),
-                      _currentWind(height),
-                      SizedBox(
-                        height: 20,
-                      ),
-                      _astronomyInfo(height),
-                      SizedBox(
-                        height: 20,
-                      ),
-                      Container(
-                        height: 125,
-                        width: width,
-                        child: ListView.builder(
-                            shrinkWrap: true,
-                            itemCount:
-                                _forecastWeatherData?.listWeather?.length ?? 0,
-                            scrollDirection: Axis.horizontal,
-                            itemBuilder:
-                                (BuildContext buildContext, int index) {
-                              var formatForecast = DateFormat('EE, dd');
-                              var formatForecastTime = DateFormat('kk:mm');
-                              var data =
-                                  _forecastWeatherData?.listWeather?[index];
-                              print('data ${jsonEncode(data)}');
-                              var iconUrl =
-                                  "https://openweathermap.org/img/w/${data?.weather?.first?.icon ?? "10d"}.png";
-                              return Card(
-                                elevation: 2,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 2, vertical: 5),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Image.network(
-                                        iconUrl,
-                                        height: height * 0.05,
-                                      ),
-                                      Text(
-                                        formatForecast.format(
-                                            DateTime.fromMillisecondsSinceEpoch(
-                                                (data?.dt ?? 0) * 1000)),
-                                      ),
-                                      Text(
-                                        formatForecastTime.format(
-                                            DateTime.fromMillisecondsSinceEpoch(
-                                                (data?.dt ?? 0) * 1000)),
-                                      ),
-                                      Row(
-                                        children: [
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                _currentWeatherData
-                                                        ?.main?.tempMax
-                                                        .toString() ??
-                                                    '',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w300,
-                                                  color: Colors.black,
-                                                  fontSize: 12,
+                        SizedBox(
+                          height: 20,
+                        ),
+                        _currentWeather(height),
+                        SizedBox(
+                          height: 20,
+                        ),
+                        _currentWind(height),
+                        SizedBox(
+                          height: 20,
+                        ),
+                        _astronomyInfo(height),
+                        SizedBox(
+                          height: 20,
+                        ),
+                        Container(
+                          height: 125,
+                          width: width,
+                          child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount:
+                                  _forecastWeatherData?.listWeather?.length ??
+                                      0,
+                              scrollDirection: Axis.horizontal,
+                              itemBuilder:
+                                  (BuildContext buildContext, int index) {
+                                var formatForecast = DateFormat('EE, dd');
+                                var formatForecastTime = DateFormat('kk:mm');
+                                var data =
+                                    _forecastWeatherData?.listWeather?[index];
+                                var iconUrl =
+                                    "https://openweathermap.org/img/w/${data?.weather?.first?.icon ?? "10d"}.png";
+                                return Card(
+                                  elevation: 2,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 2, vertical: 5),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Image.network(
+                                          iconUrl,
+                                          height: height * 0.05,
+                                        ),
+                                        Text(
+                                          formatForecast.format(DateTime
+                                              .fromMillisecondsSinceEpoch(
+                                                  (data?.dt ?? 0) * 1000)),
+                                        ),
+                                        Text(
+                                          formatForecastTime.format(DateTime
+                                              .fromMillisecondsSinceEpoch(
+                                                  (data?.dt ?? 0) * 1000)),
+                                        ),
+                                        Row(
+                                          children: [
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  data?.main?.tempMax
+                                                          .toString() ??
+                                                      '',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w300,
+                                                    color: Colors.black,
+                                                    fontSize: 12,
+                                                  ),
                                                 ),
-                                              ),
-                                              Text(
-                                                '˚',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w300,
+                                                Text(
+                                                  '˚',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w300,
+                                                    color: Colors.grey,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'C',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w100,
+                                                    color: Colors.grey,
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                                Image.asset(
+                                                  'assets/icons/arrow_upward.png',
+                                                  height: height * 0.02,
                                                   color: Colors.grey,
-                                                  fontSize: 12,
                                                 ),
-                                              ),
-                                              Text(
-                                                'C',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w100,
+                                              ],
+                                            ),
+                                            SizedBox(
+                                              height: 10,
+                                            ),
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  data?.main?.tempMin
+                                                          .toString() ??
+                                                      '',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w300,
+                                                    color: Colors.black,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  '˚',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w300,
+                                                    color: Colors.grey,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'C',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w100,
+                                                    color: Colors.grey,
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                                Image.asset(
+                                                  'assets/icons/arrow_down.png',
+                                                  height: height * 0.02,
                                                   color: Colors.grey,
-                                                  fontSize: 11,
                                                 ),
-                                              ),
-                                              Image.asset(
-                                                'assets/icons/arrow_upward.png',
-                                                height: height * 0.02,
-                                                color: Colors.grey,
-                                              ),
-                                            ],
-                                          ),
-                                          SizedBox(
-                                            height: 10,
-                                          ),
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                _currentWeatherData
-                                                        ?.main?.tempMin
-                                                        .toString() ??
-                                                    '',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w300,
-                                                  color: Colors.black,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              Text(
-                                                '˚',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w300,
-                                                  color: Colors.grey,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              Text(
-                                                'C',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w100,
-                                                  color: Colors.grey,
-                                                  fontSize: 11,
-                                                ),
-                                              ),
-                                              Image.asset(
-                                                'assets/icons/arrow_down.png',
-                                                height: height * 0.02,
-                                                color: Colors.grey,
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      )
-                                    ],
+                                              ],
+                                            ),
+                                          ],
+                                        )
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            }),
-                      ),
-                    ],
+                                );
+                              }),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -593,40 +612,84 @@ class _HomeState extends State<Home> {
             Text(
               '${_currentWeatherData?.weather?.first?.main ?? ''}',
               style: TextStyle(
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w500,
                 color: Colors.black87,
                 fontSize: 18,
               ),
             ),
           ],
         ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.start,
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              _currentWeatherData?.main?.temp.toString() ?? '',
-              style: TextStyle(
-                fontWeight: FontWeight.w300,
-                color: Colors.black,
-                fontSize: 36,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Text(
+                  _currentWeatherData?.main?.temp.toString() ?? '',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w300,
+                    color: Colors.black,
+                    fontSize: 36,
+                  ),
+                ),
+                Text(
+                  '˚',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w300,
+                    color: Colors.grey,
+                    fontSize: 26,
+                  ),
+                ),
+                Text(
+                  'C',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w100,
+                    color: Colors.grey,
+                    fontSize: 26,
+                  ),
+                ),
+              ],
             ),
-            Text(
-              '˚',
-              style: TextStyle(
-                fontWeight: FontWeight.w300,
-                color: Colors.grey,
-                fontSize: 26,
-              ),
-            ),
-            Text(
-              'C',
-              style: TextStyle(
-                fontWeight: FontWeight.w100,
-                color: Colors.grey,
-                fontSize: 26,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Text(
+                  'feels like ',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  _currentWeatherData?.main?.feelsLike.toString() ?? '',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w300,
+                    color: Colors.black,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  '˚',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w300,
+                    color: Colors.grey,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  'C',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w100,
+                    color: Colors.grey,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
